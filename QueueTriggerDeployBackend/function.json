@@ -1,0 +1,11 @@
+{
+  "bindings": [
+    {
+      "name": "QueueItem",
+      "type": "queueTrigger",
+      "direction": "in",
+      "queueName": "deploy-request-queue",
+      "connection": "storageaccountovaas83a7_STORAGE"
+    }
+  ]
+}

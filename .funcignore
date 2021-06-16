@@ -1,0 +1,12 @@
+.git*
+.vscode
+local.settings.json
+test
+azuredeploy.json
+CUSTOM_SCRIPT_setup_ovms.sh
+deploy_config.json
+deploy_config_singlevm.json
+deploy_vm.sh
+InstallAzurePowerShell.ps1
+register-SP.ps1
+setup_af.sh
