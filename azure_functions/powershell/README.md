@@ -1,0 +1,227 @@
+# How to provision Azure VM / VM ScaleSet and deploy OpenVINO™ Model Server on it automatically for the daily operation of OVaaS 
+
+This instruction shows how to provision Azure VM and deploy OpenVINO™ Model Server and specific model (IR format) on it automatically. The production system of OVaaS automatically starts in a morning and also automatically stops in the evening. Other than the business time, all IaaS instances (Azure VM / VM ScaleSet) stay down for reducing the running cost. In short, they needs to be provisioed at start timing and be stopped at the shutdown timing. With this instructions and scripts, we can understand how we implement this kind of auto scheme. 
+![OVaaS Architecture](images/ovaas-architecture.png "Architecture")
+
+The key technologies and services are
+- Azure Functions (Timer Trigger)
+- Azure Container Instances
+- Azure PowerShell
+- Azure CLI
+- Infrastructure as a code
+- Docker
+
+## Prerequisites
+Windows 10 is preferred. Have not tested on other OS.
+- OS: Windows 10
+
+Softwares below needs to be installed.
+- Visual Studio Code
+- Docker
+- Node.js (npm)
+- Azure Storage Explorer
+- [Azure Functions Core Tools (v3.x)](https://docs.microsoft.com/ja-jp/azure/azure-functions/functions-run-local?tabs=windows%2Ccsharp%2Cbash#install-the-azure-functions-core-tools)
+- [Azure Powershell](https://docs.microsoft.com/ja-jp/powershell/azure/install-az-ps?view=azps-4.8.0#install-the-azure-powershell-module)
+
+## Setup enviroment
+### Install VSCode Extensions
+- Launch VSCode
+- Go to the Extention pane
+- Search and install the extentions below
+    - Azure Functions
+### Clone this repository and open it with VSCode
+- Launch command prompt and change directory as you want.
+- Clone this repository there by the command below
+    ```cmd
+    git clone https://github.com/OVaaS/ovaas-server-prod.git
+    ```
+- Launch VSCode to load the repository by the command below
+    ```cmd
+    cd ovaas-server-prod
+    code .
+    ```
+
+```Bash
+docker pull mcr.microsoft.com/azure-cli:latest
+docker run -it mcr.microsoft.com/azure-cli:latest
+```
+
+Continue inside the container from this command. 
+
+```Bash
+git clone https://github.com/hiouchiy/intel_ai_deploy_ovms_on_azure_vm.git
+cd intel_ai_deploy_ovms_on_azure_vm
+```
+
+## Setup a configuration file (JSON format)
+### Multiple model servers on single VM (deploy_config_singlevm.json)
+You can deploy multiple model servers on single VM with configuration below. This configuraiton can save cost due to least number of VM but is basically better for test or develop use.
+```JSON
+[
+    {
+        "vm_name": "modelservervm",
+        "vm_size": "Standard_D2s_v4",
+        "deploy_type": "vmss",
+        "models":[
+            {
+                "function_name": "humanpose",
+                "model_name": "human-pose-estimation",
+                "env_name_ip": "HUMANPOSE_IPADDRESS",
+                "env_name_port": "HUMAN_POSE_PORT",
+                "port_number": 9000,
+                "model_path_on_azure_storage": "az://ovms/intel/human-pose-estimation-0001/FP16-INT8",
+                "model_server_version": "latest"
+            },
+            {
+                "function_name": "handwritten",
+                "model_name": "handwritten-japanese-recognition",
+                "env_name_ip": "HANDWRITTEN_IPADDRESS",
+                "env_name_port": "HAND_WRITTEN_PORT",
+                "port_number": 9001,
+                "model_path_on_azure_storage": "az://ovms/intel/handwritten-japanese-recognition-0001/FP16-INT8",
+                "model_server_version": "latest"
+            },
+            {
+                "function_name": "colorization",
+                "model_name": "colorization",
+                "env_name_ip": "COLORIZATION_IPADDRESS",
+                "env_name_port": "COLORIZATION_PORT",
+                "port_number": 9002,
+                "model_path_on_azure_storage": "az://ovms/public/colorization-v2/FP32",
+                "model_server_version": "2021.1"
+            }
+        ]
+    }
+]
+```
+### Single model server on single VM (deploy_config.json)
+You can deploy single model server on single VM with configuration below. In short, you need same number of vm as the number of models. This configuration is much more for production use than previous one.
+```JSON
+[
+    {
+        "vm_name": "humanpose_vm",
+        "vm_size": "Standard_D2s_v4",
+        "deploy_type": "vmss",
+        "models": [
+            {
+                "function_name": "humanpose",
+                "model_name": "human-pose-estimation",
+                "env_name_ip": "HUMANPOSE_IPADDRESS",
+                "env_name_port": "HUMAN_POSE_PORT",
+                "port_number": 9000,
+                "model_path_on_azure_storage": "az://ovms/intel/human-pose-estimation-0001/FP16-INT8",
+                "model_server_version": "latest"
+            }
+        ]
+    },
+    {
+        "vm_name": "handwritten_vm",
+        "vm_size": "Standard_D2s_v4",
+        "deploy_type": "vmss",
+        "models": [
+            {
+                "function_name": "handwritten",
+                "model_name": "handwritten-japanese-recognition",
+                "env_name_ip": "HANDWRITTEN_IPADDRESS",
+                "env_name_port": "HAND_WRITTEN_PORT",
+                "port_number": 9000,
+                "model_path_on_azure_storage": "az://ovms/intel/handwritten-japanese-recognition-0001/FP16-INT8",
+                "model_server_version": "latest"
+            }
+        ]
+    },
+    {
+        "vm_name": "colorization_vm",
+        "vm_size": "Standard_D2s_v4",
+        "deploy_type": "vmss",
+        "models": [
+            {
+                "function_name": "colorization",
+                "model_name": "colorization",
+                "env_name_ip": "COLORIZATION_IPADDRESS",
+                "env_name_port": "COLORIZATION_PORT",
+                "port_number": 9000,
+                "model_path_on_azure_storage": "az://ovms/public/colorization-v2/FP32",
+                "model_server_version": "2021.1"
+            }
+        ]
+    }
+]
+
+```
+### Parameter Definitions
+1. **vm_name**: a name of Azure VM
+1. **vm_size**: a size of Azure VM
+1. **deploy_type**: vm (single vm) / vmss (VM ScaleSet)
+1. **models**: a list consisting of model(s) to be deoloyed on the VM named "vm_name"
+    1. **function_name**: the name of the corresponding fucntion on Azure functions
+    1. **model_name**: a unique name of deployed model on model server
+    1. **env_name_ip**: Name of environemnt variable for IP address on Azure Functions
+    1. **env_name_port**: Name of environemnt variable for port number on Azure Functions
+    1. **port_number**: specific port number for accesing the model
+    1. **model_path_on_azure_storage**: The path of model file (IR) on Azure Blob Storage. The format is *az://container_name/folder_name*.
+
+## Start deployment
+First, login to Azure.
+```Bash
+az login
+```
+
+If you want to login without web browser, follow the instrunctions below to setup service principle. Refer [this site](https://tech.nsw-cloud.jp/2018/12/28/%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%89%E4%B8%80%E7%99%BA%E3%81%A7azure-cli%E3%81%AB%E3%82%B5%E3%82%A4%E3%83%B3%E3%82%A4%E3%83%B3/) for the details.
+```Bash
+az ad sp create-for-rbac --name ${DisplayName} --create-cert
+``` 
+
+Below result will be output.
+```Bash
+{
+  "appId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "displayName": "${DisplayName}",
+  "fileWithCertAndPrivateKey": "/home/user/xxxxxxxxxxx.pem",
+  "name": "http://${DisplayName}",
+  "password": null,
+  "tenant": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
+
+After that, you can login with below command.
+```Bash
+az login --service-principal \
+         --username ${appId} \
+         --tenant ${tenantId} \
+         --password ${fileWithCertAndPrivateKey} \
+```
+
+Finally, run the command below.
+- For multiple models on single VM
+  ```Bash
+  source ./deploy_vm.sh deploy_config_singlevm.json ResourceGroupName  "AzureStorageConnectionString"
+  ```
+  (*) AzureStorageConnectionString should be enclosed in double-quote.
+
+  For example
+  ```Bash
+  source ./deploy_vm.sh deploy_config_singlevm.json OVaaS_VMRG  "DefaultEndpointsProtocol=https;AccountName=…"
+  ```
+- For single model on single VM
+  ```Bash
+  source ./deploy_vm.sh deploy_config.json ResourceGroupName  "AzureStorageConnectionString"
+  ```
+  (*) AzureStorageConnectionString should be enclosed in double-quote.
+
+  For example
+  ```Bash
+  source ./deploy_vm.sh deploy_config.json OVaaS_VMRG  "DefaultEndpointsProtocol=https;AccountName=…"
+  ```
+### Parameters
+1. The path of the configuration file
+1. Specific name of resource group to be created
+1. Azure storage connection string (SAS is also be accepted)
+
+## Delete Resource Group
+
+Use Azure CLI directly as below.
+
+```Bash
+az group delete --name ResourceGroupName --y
+```
