@@ -191,3 +191,6 @@ Use Azure CLI directly as below.
 ```Bash
 az group delete --name ResourceGroupName --y
 ```
+
+# How to deploy OpenVINO™ Model Server automatically onto Azure VM for OVaaS from Azure Functions
+Refer [here](azure_functions/powershell/README.md).
