@@ -1,0 +1,16 @@
+{
+  "scriptFile": "__init__.py",
+  "bindings": [
+    {
+      "name": "mytimer",
+      "type": "timerTrigger",
+      "direction": "in",
+      "schedule": "0 */5 0-9 * * 1-5"
+    }
+  ],
+  "retry": {
+      "strategy": "fixedDelay",
+      "maxRetryCount": 1,
+      "delayInterval": "00:00:10"
+  }
+}
