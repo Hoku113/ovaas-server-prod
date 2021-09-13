@@ -10,8 +10,6 @@ ARM_TEMPLATE_FILE=azuredeploy.json
 
 AZURE_STORAGE_CONNECTION_STRING=$3
 
-az group create --name $RESOURCE_GROUP --location $LOCATION
-
 # Create Deploy Config file
 COSMOSDB_HOST=$4
 MASTER_KEY=$5
@@ -24,6 +22,9 @@ python3 create_deploy_config.py \
     --database_id $DATABASE_ID \
     --container_id $CONTAINER_ID \
     --output_file $DEPLOY_CONFIG_FILE
+
+# Create Resource Group for VM
+az group create --name $RESOURCE_GROUP --location $LOCATION
 
 function deploy_vm () {
     i=$1
