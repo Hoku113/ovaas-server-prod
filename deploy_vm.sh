@@ -12,6 +12,19 @@ AZURE_STORAGE_CONNECTION_STRING=$3
 
 az group create --name $RESOURCE_GROUP --location $LOCATION
 
+# Create Deploy Config file
+COSMOSDB_HOST=$4
+MASTER_KEY=$5
+DATABASE_ID=$6
+CONTAINER_ID=$7
+DEPLOY_CONFIG_FILE="latest_deploy_config.json"
+python3 create_deploy_config.py \
+    --cosmosdb_host $COSMOSDB_HOST \
+    --master_key $MASTER_KEY \
+    --database_id $DATABASE_ID \
+    --container_id $CONTAINER_ID \
+    --output_file $DEPLOY_CONFIG_FILE
+
 function deploy_vm () {
     i=$1
     row=$(echo $json | jq .[$i])
@@ -141,7 +154,7 @@ function deploy_vm () {
     fi
 }
 
-json=$(cat $1)
+json=$(cat $DEPLOY_CONFIG_FILE)
 len=$(echo $json | jq length)
 for i in $( seq 0 $(($len - 1)) ); do
     deploy_vm $i > /dev/null 2>&1 &
